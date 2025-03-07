@@ -2,7 +2,7 @@ import discord
 
 client = discord.Client(intents=discord.Intents.default())
 
-client.run("TOKEN")
+# client.run("TOKEN")
 
 @client.event
 async def on_ready():
