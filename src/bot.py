@@ -1,6 +1,6 @@
 import discord
 
-discord_token = "MTM0NzU4NjUzNDUyMTQzODI1Mg.GCNp-R.9olsKlnOxowvvnR4f7HoQYhrxkXtyb5KPCVykU"
+discord_token = "TOKEN"
 import discord
 
 default_intents = discord.Intents.default()
