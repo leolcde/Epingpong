@@ -7,7 +7,6 @@ class player_elo:
         self.elo = elo
 
 class player:
-    discord_token = "MTM0NzU4NjUzNDUyMTQzODI1Mg.GHLPFR.j40gTP0ko0OVaYLgpYmIb6GaW-1foTaYOBLB-Y"
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
