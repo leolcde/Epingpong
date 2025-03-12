@@ -23,6 +23,18 @@ async def on_message(message):
         else:
             await message.channel.send(f"{message.author.mention}, tu es déjà dans la file d'attente.")
 
+    # FOR LEAVE THE QUEUE
+    if message.content == "!leave":
+        i = 0
+        user_id = message.content
+        if user_id in match_queue:
+            while user_id != match_queue[i]:
+                i += 1
+            match_queue.pop(i)
+            await message.channel.send(f"{message.author.mention} a quitté la file d'attente.")
+        else:
+            await message.channel.send(f"{message.author.mention}, tu n'es pas dans la file d'attente.")
+
     # FOR DISPLAY THE QUEUE
     if message.content == "!queue":
         if match_queue:
@@ -38,15 +50,4 @@ async def on_message(message):
         else:
             await message.channel.send("La file d'attente est vide.")
 
-    # FOR LEAVE THE QUEUE
-    if message.content == "!leave":
-        i = 0
-        user_id = message.content
-        if user_id in match_queue:
-            while user_id != match_queue[i]:
-                i += 1
-            match_queue.pop(i)
-            await message.channel.send(f"{message.autor.mention} a quitté la file d'attente.")
-        else:
-            await message.channel.send(f"{message.autor.mention}, tu n'es pas dans la file d'attente.")
 client.run(discord_token)
