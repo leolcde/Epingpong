@@ -1,6 +1,5 @@
 import discord
 
-discord_token = "MTM0NzU4NjUzNDUyMTQzODI1Mg.GCNp-R.9olsKlnOxowvvnR4f7HoQYhrxkXtyb5KPCVykU"
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
@@ -39,4 +38,15 @@ async def on_message(message):
         else:
             await message.channel.send("La file d'attente est vide.")
 
+    # FOR LEAVE THE QUEUE
+    if message.content == "!leave":
+        i = 0
+        user_id = message.content
+        if user_id in match_queue:
+            while user_id != match_queue[i]:
+                i += 1
+            match_queue.pop(i)
+            await message.channel.send(f"{message.autor.mention} a quitté la file d'attente.")
+        else:
+            await message.channel.send(f"{message.autor.mention}, tu n'es pas dans la file d'attente.")
 client.run(discord_token)
