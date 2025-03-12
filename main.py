@@ -50,4 +50,14 @@ async def on_message(message):
         else:
             await message.channel.send("La file d'attente est vide.")
 
+    # FOR START THE MATCH
+    if message.content == "!start":
+        if len(match_queue) >= 2:
+            print(match_queue)
+            player1 = await client.fetch_user(match_queue.pop(0))
+            player2 = await client.fetch_user(match_queue.pop(0))
+            await message.channel.send(f"Match en cours entre {player1.mention} et {player2.mention} !")
+        else:
+            await message.channel.send(f"Il n'y a pas assez de joueur pour lancer un match...")
+
 client.run(discord_token)
