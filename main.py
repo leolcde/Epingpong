@@ -26,7 +26,7 @@ async def on_message(message):
     # FOR LEAVE THE QUEUE
     if message.content == "!leave":
         i = 0
-        user_id = message.content
+        user_id = message.author.id
         if user_id in match_queue:
             while user_id != match_queue[i]:
                 i += 1
