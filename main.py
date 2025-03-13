@@ -63,15 +63,17 @@ async def on_message(message):
             player1 = await player.client.fetch_user(player.match_queue.pop(0))
             player2 = await player.client.fetch_user(player.match_queue.pop(0))
             await message.channel.send(f"Match en cours entre {player1.mention} et {player2.mention} !")
-            check_players(message)
+            check_players(player1.name)
+            check_players(player2.name)
         else:
             await message.channel.send(f"Il n'y a pas assez de joueur pour lancer un match...")
 
 def write_on_json(variable):
     dictionary = {variable.id: variable.elo}
-    json_object = json.dumps(dictionary, indent=1)
+    json_object = json.dumps(dictionary)
     with open("elo_data.json", "w") as outfile:
         outfile.write(json_object)
+        outfile.write("\n")
     return 0
 
 def check_already_played(id):
@@ -85,9 +87,9 @@ def check_already_played(id):
         i += 1
     return 84
 
-def check_players(message):
-    if check_already_played(message.author.id) == 84:
-        user = player_elo(message.author.id, 100)
+def check_players(player):
+    if check_already_played(player) == 84:
+        user = player_elo(player, 100)
         write_on_json(user)
     return 0
 
