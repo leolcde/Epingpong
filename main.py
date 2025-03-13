@@ -11,6 +11,7 @@ class player:
     intents.message_content = True
     client = discord.Client(intents=intents)
     match_queue = []
+    global_dict = {}
 
 @player.client.event
 async def on_ready():
@@ -69,7 +70,8 @@ async def on_message(message):
 
 def write_on_json(variable):
     dictionary = {variable.id: variable.elo}
-    json_object = json.dumps(dictionary)
+    player.global_dict.append(dictionary)
+    json_object = json.dumps(player.global_dict)
     with open("elo_data.json", "w") as outfile:
         outfile.write(json_object)
         outfile.write("\n")
@@ -93,4 +95,3 @@ def check_players(player):
     return 0
 
 player.client.run(player.discord_token)
-
