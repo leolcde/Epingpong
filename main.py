@@ -7,18 +7,19 @@ class player_elo:
         self.elo = elo
 
 class player:
+    discord_token = "MTM0NzU4NjUzNDUyMTQzODI1Mg.G19UWt.Hixnao-1cRp5S_3rcZZFhC4fDOBQqcgzHfNdtY"
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
     match_queue = []
-    @client.event
-    async def on_ready():
-        print("Le bot est carré mgl")
-    @client.event
-    async def on_message(message):
-        if message.author == player.client.user:
-            return
 
+@player.client.event
+async def on_ready():
+    print("Le bot est carré mgl")
+@player.client.event
+async def on_message(message):
+    if message.author == player.client.user:
+        return
     # FOR JOIN THE QUEUE
     if message.content == "!join":
         user_id = message.author.id
@@ -27,6 +28,18 @@ class player:
             await message.channel.send(f"{message.author.mention} a rejoint la file d'attente. Position : {len(player.match_queue)}")
         else:
             await message.channel.send(f"{message.author.mention}, tu es déjà dans la file d'attente.")
+
+    # FOR LEAVE THE QUEUE
+    if message.content == "!leave":
+        i = 0
+        user_id = message.author.id
+        if user_id in player.match_queue:
+            while user_id != player.match_queue[i]:
+                i += 1
+            player.match_queue.pop(i)
+            await message.channel.send(f"{message.author.mention} a quitté la file d'attente.")
+        else:
+            await message.channel.send(f"{message.author.mention}, tu n'es pas dans la file d'attente.")
 
     # FOR DISPLAY THE QUEUE
     if message.content == "!queue":
@@ -43,17 +56,16 @@ class player:
         else:
             await message.channel.send("La file d'attente est vide.")
 
-    # FOR LEAVE THE QUEUE
-    if message.content == "!leave":
-        i = 0
-        user_id = message.author.id
-        if user_id in player.match_queue:
-            while user_id != player.match_queue[i]:
-                i += 1
-            player.match_queue.pop(i)
-            await message.channel.send(f"{message.author.mention} a quitté la file d'attente.")
+    # FOR START THE MATCH
+    if message.content == "!start":
+        if len(player.match_queue) >= 2:
+            print(player.match_queue)
+            player1 = await player.client.fetch_user(player.match_queue.pop(0))
+            player2 = await player.client.fetch_user(player.match_queue.pop(0))
+            await message.channel.send(f"Match en cours entre {player1.mention} et {player2.mention} !")
+            check_players(message)
         else:
-            await message.channel.send(f"{message.author.mention}, tu n'es pas dans la file d'attente.")
+            await message.channel.send(f"Il n'y a pas assez de joueur pour lancer un match...")
 
 def write_on_json(variable):
     dictionary = {variable.id: variable.elo}
@@ -65,17 +77,19 @@ def write_on_json(variable):
 def check_already_played(id):
     i = 0
     with open("elo_data.json", "r") as openfile:
+        if json.JSONDecodeError:
+            return 84
         json_object = json.load(openfile)
         if json_object.values(i) == id:
             return 0
         i += 1
     return 84
 
-def check_players():
-    user = player_elo()
-    if check_already_played(player.message.author.id) == 84:
-        user = (player.message.author.id, 100)
+def check_players(message):
+    if check_already_played(message.author.id) == 84:
+        user = player_elo(message.author.id, 100)
         write_on_json(user)
     return 0
 
 player.client.run(player.discord_token)
+
