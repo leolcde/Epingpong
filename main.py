@@ -12,6 +12,8 @@ class player:
     client = discord.Client(intents=intents)
     match_queue = []
     global_dict = {}
+    p1 = None
+    p2 = None
 
 @player.client.event
 async def on_ready():
@@ -20,7 +22,7 @@ async def on_ready():
 async def on_message(message):
     if message.author == player.client.user:
         return
-    # FOR JOIN THE QUEUE
+    # TO JOIN THE QUEUE
     if message.content == "!join":
         user_id = message.author.id
         if user_id not in player.match_queue:
@@ -29,7 +31,7 @@ async def on_message(message):
         else:
             await message.channel.send(f"{message.author.mention}, tu es déjà dans la file d'attente.")
 
-    # FOR LEAVE THE QUEUE
+    # TO LEAVE THE QUEUE
     if message.content == "!leave":
         i = 0
         user_id = message.author.id
@@ -41,7 +43,7 @@ async def on_message(message):
         else:
             await message.channel.send(f"{message.author.mention}, tu n'es pas dans la file d'attente.")
 
-    # FOR DISPLAY THE QUEUE
+    # TO DISPLAY THE QUEUE
     if message.content == "!queue":
         if player.match_queue:
             print(player.match_queue)
@@ -56,21 +58,41 @@ async def on_message(message):
         else:
             await message.channel.send("La file d'attente est vide.")
 
-    # FOR START THE MATCH
+    # TO START THE MATCH
     if message.content == "!start":
         if len(player.match_queue) >= 2:
             print(player.match_queue)
-            player1 = await player.client.fetch_user(player.match_queue.pop(0))
-            player2 = await player.client.fetch_user(player.match_queue.pop(0))
-            await message.channel.send(f"Match en cours entre {player1.mention} et {player2.mention} !")
-            check_players(player1.name)
-            check_players(player2.name)
+            player.p1 = await player.client.fetch_user(player.match_queue.pop(0))
+            player.p2 = await player.client.fetch_user(player.match_queue.pop(0))
+            await message.channel.send(f"Match en cours entre {player.p1.mention} et {player.p2.mention} !")
+            check_players(player.p1.name)
+            check_players(player.p2.name)
         else:
             await message.channel.send(f"Il n'y a pas assez de joueur pour lancer un match...")
 
+    # TO PUT THE WINNER OF THE MATCH
+    if message.content == "!win":
+        await message.channel.send(f"Who's the winner ?\n> {player.p1.name}\n> {player.p2.name}")
+        match message.content:
+            case player.p1.name:
+                change_elo(player.p1, player.p2)
+            case player.p2.name:
+                change_elo(player.p2, player.p1)
+            case default:
+                await message.channel.send(f"Put a right answer please")
+
+def change_elo(player1, player2):
+    for key, value in player.global_dict.items():
+        if key == player1.name:
+            value += 10
+    for key, value in player.global_dict.items():
+        if key == player2.name:
+            value -= 10
+    return 0
+
 def write_on_json(variable):
     dictionary = {variable.id: variable.elo}
-    player.global_dict.append(dictionary)
+    player.global_dict.update(dictionary)
     json_object = json.dumps(player.global_dict)
     with open("elo_data.json", "w") as outfile:
         outfile.write(json_object)
