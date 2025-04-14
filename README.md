@@ -4,6 +4,10 @@ Ce bot enregistre les résultats de chaque match et met à jour le **classement 
 
 🔹 **Comment ça marche ?**
 
+➤ **`!join`** → Rejoins la file d'attente 
+
+➤ **`!leave`** → Quitte la file d'attente
+
 ➤ **`!match @joueur1 @joueur2 score`** → Enregistre un match
 
 ➤ **`!ranking`** → Affiche le classement actuel
