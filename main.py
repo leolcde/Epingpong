@@ -10,6 +10,7 @@ class player:
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
+    discord_token = "token"
     match_queue = []
     global_dict = {}
     p1 = None
@@ -22,6 +23,7 @@ async def on_ready():
 async def on_message(message):
     if message.author == player.client.user:
         return
+
     # TO JOIN THE QUEUE
     if message.content == "!join":
         user_id = message.author.id
@@ -73,6 +75,8 @@ async def on_message(message):
     # TO PUT THE WINNER OF THE MATCH
     if message.content == "!win":
         await message.channel.send(f"Who's the winner ?\n> {player.p1.name}\n> {player.p2.name}")
+
+        if message.content == player.p1
         match message.content:
             case player.p1.name:
                 change_elo(player.p1, player.p2)
@@ -80,6 +84,11 @@ async def on_message(message):
                 change_elo(player.p2, player.p1)
             case default:
                 await message.channel.send(f"Put a right answer please")
+
+    # TO DISPLAY THE LEADER BOARD
+    if message.content == "!ranking":
+        await message.channel.send(f"leader-board de con :")
+        await message.channel.send(player.global_dict)
 
 def change_elo(player1, player2):
     for key, value in player.global_dict.items():
