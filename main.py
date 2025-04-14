@@ -10,7 +10,6 @@ class player:
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
-    discord_token = "Token"
     match_queue = []
     global_dict = {}
     p1 = None
@@ -74,16 +73,24 @@ async def on_message(message):
 
     # TO PUT THE WINNER OF THE MATCH
     if message.content == "!win":
-        await message.channel.send(f"Who's the winner ?\n> {player.p1.name}\n> {player.p2.name}")
-
-        if message.content == player.p1:
-            match message.content:
-                case player.p1.name:
+        if player.p1.name and player.p2.name:
+            await message.channel.send(f"Who's the winner?\n> {player.p1.name}\n> {player.p2.name}")
+            def check(m):
+                return m.author == message.author and m.channel == message.channel
+            try:
+                reply = await player.client.wait_for('message', check=check, timeout=30)
+                winner = reply.content.strip()
+                if winner == player.p1.name:
                     change_elo(player.p1, player.p2)
-                case player.p2.name:
+                    await message.channel.send(f"{player.p1.name} wins! ELO updated.")
+                elif winner == player.p2.name:
                     change_elo(player.p2, player.p1)
-                case default:
-                    await message.channel.send(f"Put a right answer please")
+                    await message.channel.send(f"{player.p2.name} wins! ELO updated.")
+                else:
+                    await message.channel.send("Please enter a valid name.")
+            except player.asyncio.TimeoutError:
+                await message.channel.send("You took too long to reply.")
+
 
     # TO DISPLAY THE LEADER BOARD
     if message.content == "!ranking":
@@ -93,12 +100,14 @@ async def on_message(message):
         await message.channel.send(player.global_dict)
 
 def change_elo(player1, player2):
-    for key, value in player.global_dict.items():
-        if key == player1.name:
-            value += 10
-    for key, value in player.global_dict.items():
-        if key == player2.name:
-            value -= 10
+    if player1.name in player.global_dict:
+        player.global_dict[player1.name] += 10
+    user1 = player_elo(player1.name, player.global_dict[player1.name])
+    write_on_json(user1)
+    if player2.name in player.global_dict:
+        player.global_dict[player2.name] -= 10
+    user2 = player_elo(player2.name, player.global_dict[player2.name])
+    write_on_json(user2)
     return 0
 
 def write_on_json(variable):
@@ -114,7 +123,7 @@ def check_already_played(id):
     i = 0
     with open("elo_data.json", "r") as openfile:
         json_object = json.load(openfile)
-        if json_object.values(i) == id:
+        if list(json_object.values())[i] == id:
             return 0
         i += 1
     return 84
