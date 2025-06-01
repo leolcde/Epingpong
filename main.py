@@ -4,16 +4,28 @@ import sys
 import discord
 from dotenv import load_dotenv
 import os
-
+import redis
 from gameManager import gameManager
 from utils import change_elo, check_players
+from RedisMatchQueue import RedisMatchQueue
 
 load_dotenv()
 
 intents = discord.Intents.default()
 intents.message_content = True
-match_queue : list[int] = []
 tree = discord.app_commands.CommandTree(gameManager.client)
+    
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    db=int(os.getenv("REDIS_DB", 0)),
+    password=os.getenv("REDIS_PASSWORD", None)
+)
+
+match_queue = RedisMatchQueue(
+    redis_client=redis_client,
+    queue_name=os.getenv("REDIS_QUEUE_NAME", "match_queue")
+)
 
 @gameManager.client.event
 async def on_ready():
@@ -43,14 +55,14 @@ async def win(interaction: discord.Interaction):
             winner = reply.content.strip()
             if winner == gameManager.p1.name:
                 change_elo(gameManager.p1, gameManager.p2)
-                await interaction.followup.send(f"{gameManager.p1.name} wins! ELO updated.")
+                await interaction.followup.send(f"<@{gameManager.p1.id}> est le gagnant! ELO mis à jour.")
             elif winner == gameManager.p2.name:
                 change_elo(gameManager.p2, gameManager.p1)
-                await interaction.followup.send(f"{gameManager.p2.name} wins! ELO updated.")
+                await interaction.followup.send(f"<@{gameManager.p2.id}> est le gagnant! ELO mis à jour.")
             else:
-                await interaction.followup.send("Please enter a valid name.")
+                await interaction.followup.send("Nom invalide. Veuillez répondre avec le nom exact du gagnant.")
         except asyncio.TimeoutError:
-            await interaction.followup.send("You took too long to reply.")
+            await interaction.followup.send("Temps écoulé pour répondre. Veuillez réessayer.")
 
 @tree.command(name="ranking", description="Afficher le classement ELO")
 async def ranking(interaction: discord.Interaction):
@@ -61,19 +73,14 @@ async def ranking(interaction: discord.Interaction):
     )
     await interaction.response.send_message(f"Leaderboard :\n{leaderboard}")
 
-
-@tree.command(name="ping", description="Répond avec Pong!")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("Pong!")
-
 # FOR JOIN THE QUEUE
 @tree.command(name="join", description="Rejoindre la file d'attente")
 async def join(interaction: discord.Interaction):
     user_id = interaction.user.id
-    if user_id not in match_queue:
-        match_queue.append(user_id)
+    if user_id not in match_queue.get_all():
+        match_queue.push(user_id)
         await interaction.response.send_message(
-            f"{interaction.user.mention} a rejoint la file d'attente. Position : {len(match_queue)}"
+            f"{interaction.user.mention} a rejoint la file d'attente. Position : {len(match_queue.get_all())}."
         )
     else:
         await interaction.response.send_message(
@@ -85,8 +92,8 @@ async def join(interaction: discord.Interaction):
 @tree.command(name="leave", description="Quitter la file d'attente")
 async def leave(interaction: discord.Interaction):
     user_id = interaction.user.id
-    if user_id in match_queue:
-        match_queue.remove(user_id)
+    if not match_queue.contains(user_id):
+        match_queue.push(user_id)
         await interaction.response.send_message(
             f"{interaction.user.mention} a quitté la file d'attente."
         )
@@ -99,27 +106,32 @@ async def leave(interaction: discord.Interaction):
 # FOR SHOW THE QUEUE
 @tree.command(name="queue", description="Afficher la file d'attente")
 async def queue(interaction: discord.Interaction):
-    if match_queue:
+    queue = match_queue.get_all()
+    if queue:
         queue_list : list[str] = []
-        for i, user_id in enumerate(match_queue):
+        for i, user_id in enumerate(queue):
             try:
                 user = await gameManager.client.fetch_user(user_id)
                 queue_list.append(f"{i+1}. {user.name}")
             except discord.NotFound:
                 queue_list.append(f"{i+1}. Utilisateur inconnu")
-        await interaction.response.send_message(
-            "File d'attente actuelle :\n" + "\n".join(queue_list)
+        embed = discord.Embed(
+            title="File d'attente",
+            description="\n".join(queue_list),
+            color=discord.Color.blue()
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     else:
-        await interaction.response.send_message("La file d'attente est vide.")
+        await interaction.response.send_message("La file d'attente est vide.", ephemeral=True)
 
 @tree.command(name="start", description="Démarrer un match")
 async def start(interaction: discord.Interaction):
-    if len(match_queue) >= 2:
-        gameManager.p1 = await gameManager.client.fetch_user(match_queue.pop(0))
-        gameManager.p2 = await gameManager.client.fetch_user(match_queue.pop(0))
+    queue = match_queue.get_all()
+    if len(queue) >= 2:
+        gameManager.p1 = await gameManager.client.fetch_user(match_queue.pop()) # type: ignore
+        gameManager.p2 = await gameManager.client.fetch_user(match_queue.pop()) # type: ignore
         await interaction.response.send_message(
-            f"Match en cours entre {gameManager.p1} et {gameManager.p2} !"
+            f"Match en cours entre <@{gameManager.p1.id}> et <@{gameManager.p2.id}> !"
         )
         check_players(gameManager.p1.name)
         check_players(gameManager.p2.name)
