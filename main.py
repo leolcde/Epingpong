@@ -1,12 +1,9 @@
-import asyncio
-import json
+import os
 import sys
 import discord
 from dotenv import load_dotenv
-import os
-import redis
 from gameManager import gameManager
-from utils import change_elo, check_players
+from utils import ensure_player_is_in_db
 from RedisMatchQueue import RedisMatchQueue
 
 load_dotenv()
@@ -14,16 +11,9 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 tree = discord.app_commands.CommandTree(gameManager.client)
-    
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    db=int(os.getenv("REDIS_DB", 0)),
-    password=os.getenv("REDIS_PASSWORD", None)
-)
 
 match_queue = RedisMatchQueue(
-    redis_client=redis_client,
+    redis_client=gameManager.redis_client,
     queue_name=os.getenv("REDIS_QUEUE_NAME", "match_queue")
 )
 
@@ -38,46 +28,62 @@ async def on_ready():
 
 @tree.command(name="win", description="Déclarer le gagnant du match en cours")
 async def win(interaction: discord.Interaction):
-    if gameManager.p1 is None or gameManager.p2 is None:
-        await interaction.response.send_message("No match in progress. Please start a match first.", ephemeral=True)
-        return
-    if gameManager.p1.name and gameManager.p2.name:
+    if not gameManager.is_game_started():
         await interaction.response.send_message(
-            f"Who's the winner?\n> {gameManager.p1.name}\n> {gameManager.p2.name}\nRépondez par le nom exact du gagnant dans le chat."
+            "No match in progress. Please start a match first.", ephemeral=True
         )
-        def check(m: discord.Message):
-            return (
-                m.author == interaction.user and
-                m.channel == interaction.channel
+        return
+    p1, p2 = await gameManager.get_players()
+
+    class WinnerView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=30)
+
+        async def update_message(self, interaction_button: discord.Interaction, winner: discord.User, looser: discord.User):
+            gameManager.set_game_ended(winner=winner, looser=looser)
+            await interaction_button.response.edit_message(
+                content=f"<@{winner.id}> est le gagnant! ELO mis à jour.",
+                view=None
             )
-        try:
-            reply = await gameManager.client.wait_for('message', check=check, timeout=30)
-            winner = reply.content.strip()
-            if winner == gameManager.p1.name:
-                change_elo(gameManager.p1, gameManager.p2)
-                await interaction.followup.send(f"<@{gameManager.p1.id}> est le gagnant! ELO mis à jour.")
-            elif winner == gameManager.p2.name:
-                change_elo(gameManager.p2, gameManager.p1)
-                await interaction.followup.send(f"<@{gameManager.p2.id}> est le gagnant! ELO mis à jour.")
-            else:
-                await interaction.followup.send("Nom invalide. Veuillez répondre avec le nom exact du gagnant.")
-        except asyncio.TimeoutError:
-            await interaction.followup.send("Temps écoulé pour répondre. Veuillez réessayer.")
+
+        @discord.ui.button(label=p1.name, style=discord.ButtonStyle.primary)
+        async def p1_button(self, interaction_button: discord.Interaction, button: discord.ui.Button): # type: ignore
+            await self.update_message(interaction_button, winner=p1, looser=p2)
+            self.stop()
+
+        @discord.ui.button(label=p2.name, style=discord.ButtonStyle.danger)
+        async def p2_button(self, interaction_button: discord.Interaction, button: discord.ui.Button): # type: ignore
+            await self.update_message(interaction_button, winner=p2, looser=p1)
+            self.stop()
+
+    await interaction.response.send_message(
+        "Cliquez sur le nom du gagnant :", view=WinnerView()
+    )
+
 
 @tree.command(name="ranking", description="Afficher le classement ELO")
 async def ranking(interaction: discord.Interaction):
-    with open("elo_data.json", "r") as openfile:
-        gameManager.global_dict = json.load(openfile)
-    leaderboard = "\n".join(
-        f"{name}: {elo}" for name, elo in sorted(gameManager.global_dict.items(), key=lambda x: x[1], reverse=True)
+    leaderboard = gameManager.elo_db.get_leaderboard()
+    if not leaderboard:
+        await interaction.response.send_message("Le classement est vide.", ephemeral=True)
+        return
+    sorted_leaderboad : dict[str, int] = {}
+    for user_id, elo in leaderboard.items():
+        user = await gameManager.client.fetch_user(int(user_id))
+        sorted_leaderboad[user.name] = elo
+    leaderboard_result = "\n".join([f"{name}: {elo}" for name, elo in sorted_leaderboad.items()])
+    embed = discord.Embed(
+        title="Classement ELO",
+        description=leaderboard_result,
+        color=discord.Color.gold()
     )
-    await interaction.response.send_message(f"Leaderboard :\n{leaderboard}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # FOR JOIN THE QUEUE
 @tree.command(name="join", description="Rejoindre la file d'attente")
 async def join(interaction: discord.Interaction):
-    user_id = interaction.user.id
-    if user_id not in match_queue.get_all():
+    user_id = str(interaction.user.id)
+    if not match_queue.contains(user_id):
         match_queue.push(user_id)
         await interaction.response.send_message(
             f"{interaction.user.mention} a rejoint la file d'attente. Position : {len(match_queue.get_all())}."
@@ -91,9 +97,9 @@ async def join(interaction: discord.Interaction):
 # FOR LEAVE THE QUEUE
 @tree.command(name="leave", description="Quitter la file d'attente")
 async def leave(interaction: discord.Interaction):
-    user_id = interaction.user.id
-    if not match_queue.contains(user_id):
-        match_queue.push(user_id)
+    user_id = str(interaction.user.id)
+    if match_queue.contains(user_id):
+        match_queue.remove(user_id)
         await interaction.response.send_message(
             f"{interaction.user.mention} a quitté la file d'attente."
         )
@@ -107,11 +113,12 @@ async def leave(interaction: discord.Interaction):
 @tree.command(name="queue", description="Afficher la file d'attente")
 async def queue(interaction: discord.Interaction):
     queue = match_queue.get_all()
+    print(f"Current queue: {queue}")  # Debugging line to check the queue contents
     if queue:
         queue_list : list[str] = []
-        for i, user_id in enumerate(queue):
+        for i, user_id in enumerate(queue[:10]):
             try:
-                user = await gameManager.client.fetch_user(user_id)
+                user = await gameManager.client.fetch_user(int(user_id))
                 queue_list.append(f"{i+1}. {user.name}")
             except discord.NotFound:
                 queue_list.append(f"{i+1}. Utilisateur inconnu")
@@ -126,18 +133,31 @@ async def queue(interaction: discord.Interaction):
 
 @tree.command(name="start", description="Démarrer un match")
 async def start(interaction: discord.Interaction):
-    queue = match_queue.get_all()
-    if len(queue) >= 2:
-        gameManager.p1 = await gameManager.client.fetch_user(match_queue.pop()) # type: ignore
-        gameManager.p2 = await gameManager.client.fetch_user(match_queue.pop()) # type: ignore
+    print("Starting match...")
+    if gameManager.is_game_started():
         await interaction.response.send_message(
-            f"Match en cours entre <@{gameManager.p1.id}> et <@{gameManager.p2.id}> !"
+            "Un match est déjà en cours. Veuillez attendre qu'il se termine.",
+            ephemeral=True
         )
-        check_players(gameManager.p1.name)
-        check_players(gameManager.p2.name)
+        return
+    queue = match_queue.get_all()
+    print(f"Current queue: {queue}")  # Debugging line to check the queue contents
+    if len(queue) >= 2:
+        user_id1 = int(match_queue.pop())  # type: ignore
+        user_id2 = int(match_queue.pop())  # type: ignore
+        p1 = await gameManager.client.fetch_user(user_id1) # type: ignore
+        p2 = await gameManager.client.fetch_user(user_id2) # type: ignore
+        gameManager.set_players(p1, p2)
+        await interaction.response.send_message(
+            f"Match en cours entre <@{p1.id}> et <@{p2.id}> !"
+        )
+        ensure_player_is_in_db(p1)
+        ensure_player_is_in_db(p2)
+        gameManager.set_game_started()
     else:
         await interaction.response.send_message(
-            "Il n'y a pas assez de joueur pour lancer un match..."
+            "Il n'y a pas assez de joueur pour lancer un match...",
+            ephemeral=True
         )
 
 token = os.getenv("DISCORD_TOKEN")

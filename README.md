@@ -15,3 +15,29 @@ Ce bot enregistre les résultats de chaque match et met à jour le **classement 
 ➤ **`!stats @joueur`** → Consulte tes performances
 
 Prêt à devenir le champion d’Epitech ? 🏆🔥
+
+🔹 **Installation**
+1. Ajouter d'un environnement virtuel:
+   ```bash
+    python -m venv .venv
+   ```
+2. Activer l'environnement virtuel:
+    - Sur Windows:
+      ```bash
+        .venv\Scripts\activate
+      ```
+    - Sur macOS/Linux:
+      ```bash
+        source .venv/bin/activate # bash
+        source .venv/bin/activate.fish # fish
+        source .venv/bin/activate.csh # csh
+      ```
+3. Installer les dépendances:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4. Lancer le bot:
+    ```bash
+    python main.py # lancement en production
+    jurriged main.py # lancement development avec hot reload
+    ```
