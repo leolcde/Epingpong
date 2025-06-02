@@ -36,7 +36,19 @@ Prêt à devenir le champion d’Epitech ? 🏆🔥
     ```bash
     pip install -r requirements.txt
     ```
-4. Lancer le bot:
+
+4. Configurer le fichier `.env`:
+    - Créer un fichier `.env` à la racine du projet.
+    - Ajouter les variables d'environnement nécessaires (voir `.env.example` pour les exemples).
+
+5. démarrer une instance de Redis:
+    - Si vous avez Docker installé, vous pouvez lancer Redis avec la commande suivante:
+      ```bash
+      docker run -d --name redis -p 6379:6379 redis
+      ```
+    - Sinon, installez Redis local selon votre système d'exploitation.
+
+6. Lancer le bot:
     ```bash
     python main.py # lancement en production
     jurriged main.py # lancement development avec hot reload
